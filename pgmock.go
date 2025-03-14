@@ -11,6 +11,7 @@ type pgmock struct {
 	Pool
 }
 
+// NewWithMock creates a new instance of Client with the provided Mock Pool.
 func NewWithMock(pool Pool) Client {
 	return &pgmock{
 		Pool:              pool,

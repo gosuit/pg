@@ -6,27 +6,32 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose"
 )
 
-// Client is interface for communicate with postgres database.
+// Client is interface for communication with postgres database.
 type Client interface {
-	Pool
-
+	// Registers custom types with the database connection.
 	RegisterTypes(types []string) error
 
+	// Returns the underlying pgxpool.Pool instance.
 	ToPgx() *pgxpool.Pool
+
+	// Embeds the Pool interface for pool functionalities.
+	Pool
 }
 
 // Config is type for database connection.
 type Config struct {
-	Host           string `yaml:"host"     env:"PG_HOST"    env-default:"localhost"`
-	Port           int    `yaml:"port"     env:"PG_PORT"    env-default:"5432"`
-	DBName         string `yaml:"dbname"   env:"PG_NAME"    env-default:"postgres"`
-	Username       string `yaml:"username" env:"PG_USER"`
+	Host           string `yaml:"host"            env:"PG_HOST"            env-default:"localhost"`
+	Port           int    `yaml:"port"            env:"PG_PORT"            env-default:"5432"`
+	DBName         string `yaml:"dbname"          env:"PG_NAME"            env-default:"postgres"`
+	Username       string `yaml:"username"        env:"PG_USER"`
 	Password       string `env:"POSTGRES_PASSWORD"`
-	SSLMode        string `yaml:"sslmode"  env:"PG_SSLMODE" env-default:"disabled"`
-	MigrationsRun  bool   `yaml:"migrations_run" env:"PG_MIGRATIONS_RUN" env-default:"false"`
-	MigrationsPath string `yaml:"migrations_path" env:"PG_MIGRATIONS_PATH"`
+	SSLMode        string `yaml:"sslmode"         env:"PG_SSLMODE"         env-default:"disable"`
+	MigrationsRun  bool   `yaml:"migrations_run"  env:"PG_MIGRATIONS_RUN"  env-default:"false"`
+	MigrationsPath string `yaml:"migrations_path" env:"PG_MIGRATIONS_PATH" env-default:"./migrations"`
 }
 
 type pgclient struct {
@@ -34,7 +39,8 @@ type pgclient struct {
 	*pgxpool.Pool
 }
 
-// ConnectToDb returns a pointer to a pgxpool.Pool representing the database connection pool.
+// New creates a new Client instance and establishes a connection to the database.
+// It parses the provided configuration and runs migrations if specified.
 func New(ctx context.Context, cfg *Config) (Client, error) {
 	config, err := pgxpool.ParseConfig(fmt.Sprintf(
 		"user=%s password=%s host=%s port=%d dbname=%s sslmode=%s",
@@ -53,6 +59,26 @@ func New(ctx context.Context, cfg *Config) (Client, error) {
 		return nil, err
 	}
 
+	if cfg.MigrationsRun {
+		sql := stdlib.OpenDBFromPool(db)
+
+		if err := sql.Ping(); err != nil {
+			return nil, err
+		}
+
+		if err := goose.SetDialect("postgres"); err != nil {
+			return nil, err
+		}
+
+		if err := goose.Up(sql, cfg.MigrationsPath); err != nil {
+			return nil, err
+		}
+
+		if err := sql.Close(); err != nil {
+			return nil, err
+		}
+	}
+
 	client := &pgclient{
 		Pool:              db,
 		afterConnectFuncs: make([]func(ctx context.Context, conn *pgx.Conn) error, 0),
@@ -61,6 +87,7 @@ func New(ctx context.Context, cfg *Config) (Client, error) {
 	return client, nil
 }
 
+// NewWithPool creates a new Client instance using an existing pgxpool.Pool.
 func NewWithPool(ctx context.Context, pool *pgxpool.Pool) (Client, error) {
 	client := &pgclient{
 		Pool:              pool,
