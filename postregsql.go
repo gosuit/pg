@@ -24,14 +24,14 @@ type Client interface {
 
 // Config is type for database connection.
 type Config struct {
-	Host           string `yaml:"host"            env:"PG_HOST"            env-default:"localhost"`
-	Port           int    `yaml:"port"            env:"PG_PORT"            env-default:"5432"`
-	DBName         string `yaml:"dbname"          env:"PG_NAME"            env-default:"postgres"`
-	Username       string `yaml:"username"        env:"PG_USER"`
-	Password       string `env:"POSTGRES_PASSWORD"`
-	SSLMode        string `yaml:"sslmode"         env:"PG_SSLMODE"         env-default:"disable"`
-	MigrationsRun  bool   `yaml:"migrations_run"  env:"PG_MIGRATIONS_RUN"  env-default:"false"`
-	MigrationsPath string `yaml:"migrations_path" env:"PG_MIGRATIONS_PATH" env-default:"./migrations"`
+	Host           string `confy:"host"     yaml:"host"     json:"host"     toml:"host"     env:"PG_HOST" env-default:"localhost"`
+	Port           int    `confy:"port"     yaml:"port"     json:"port"     toml:"port"     env:"PG_PORT" env-default:"5432"`
+	DBName         string `confy:"dbname"   yaml:"dbname"   json:"dbname"   toml:"dbname"   env:"PG_NAME" env-default:"postgres"`
+	Username       string `confy:"username" yaml:"username" json:"username" toml:"username" env:"PG_USER"`
+	Password       string `confy:"password" env:"POSTGRES_PASSWORD"`
+	SSLMode        string `confy:"sslmode"         yaml:"sslmode"         json:"sslmode"         toml:"sslmode"         env:"PG_SSLMODE"         env-default:"disable"`
+	MigrationsRun  bool   `confy:"migrations_run"  yaml:"migrations_run"  json:"migrations_run"  toml:"migrations_run"  env:"PG_MIGRATIONS_RUN"  env-default:"false"`
+	MigrationsPath string `confy:"migrations_path" yaml:"migrations_path" json:"migrations_path" toml:"migrations_path" env:"PG_MIGRATIONS_PATH" env-default:"./migrations"`
 }
 
 type pgclient struct {
