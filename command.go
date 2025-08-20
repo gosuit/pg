@@ -42,5 +42,16 @@ func (c *command) Returning(dest any) Command {
 }
 
 func (c *command) Exec(ctx context.Context) error {
+	c.getQueryManager(ctx)
+
 	return nil
+}
+
+func (c *command) getQueryManager(ctx context.Context) queryManager {
+	tx, ok := getTxFromContext(ctx)
+	if ok {
+		return tx
+	}
+
+	return c.pool
 }

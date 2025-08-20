@@ -34,5 +34,16 @@ func (q *query) WithArg(key string, value any) Query {
 }
 
 func (q *query) Exec(ctx context.Context) error {
+	q.getQueryManager(ctx)
+
 	return nil
+}
+
+func (q *query) getQueryManager(ctx context.Context) queryManager {
+	tx, ok := getTxFromContext(ctx)
+	if ok {
+		return tx
+	}
+
+	return q.pool
 }
