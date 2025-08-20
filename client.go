@@ -79,17 +79,3 @@ func (c *client) ToPgx() *pgxpool.Pool {
 func (c *client) ToDB() *sql.DB {
 	return stdlib.OpenDBFromPool(c.pool)
 }
-
-func Arg(key string, value any) *Argument {
-	return &Argument{
-		key,
-		value,
-	}
-}
-
-type Argument struct {
-	key   string
-	value any
-}
-
-type TxFunc func(ctx context.Context) error
