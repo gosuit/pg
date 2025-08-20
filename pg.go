@@ -16,6 +16,10 @@ type Client interface {
 	ToDB() *sql.DB
 }
 
+func New() Client {
+	return &client{}
+}
+
 type Query interface {
 	WithArgs(args ...*Argument) Query
 	WithArg(key string, value any) Query
