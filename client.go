@@ -69,6 +69,28 @@ func (c *client) Command(sql string, model any) Command {
 }
 
 func (c *client) Transactional(ctx context.Context, fn TxFunc) error {
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	tc := &txContext{
+		tx:   tx,
+		base: ctx,
+	}
+
+	if err := fn(tc); err != nil {
+		if err := tx.Rollback(ctx); err != nil {
+			return err
+		}
+
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
