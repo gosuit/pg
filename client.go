@@ -12,7 +12,7 @@ import (
 type Client interface {
 	Query(sql string, model any) Query
 	Command(sql string, model any) Command
-	Transactional(ctx context.Context, fn TxFunc) error
+	Transactional(ctx context.Context, fn TxFunc, opts ...TxOption) error
 
 	ToPgx() *pgxpool.Pool
 	ToDB() *sql.DB
@@ -68,8 +68,8 @@ func (c *client) Command(sql string, model any) Command {
 	}
 }
 
-func (c *client) Transactional(ctx context.Context, fn TxFunc) error {
-	tx, err := c.pool.Begin(ctx)
+func (c *client) Transactional(ctx context.Context, fn TxFunc, opts ...TxOption) error {
+	tx, err := c.pool.BeginTx(ctx, *getTxOptions(opts))
 	if err != nil {
 		return err
 	}
