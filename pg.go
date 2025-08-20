@@ -17,13 +17,13 @@ type Client interface {
 }
 
 type Query interface {
-	WithArgs(args ...[]*Argument) Query
+	WithArgs(args ...*Argument) Query
 	WithArg(key string, value any) Query
 	Exec(ctx context.Context) error
 }
 
 type Command interface {
-	WithArgs(args ...[]*Argument) Command
+	WithArgs(args ...*Argument) Command
 	WithArg(key string, value any) Command
 	Returning(dest any) Command
 	Exec(ctx context.Context) error
