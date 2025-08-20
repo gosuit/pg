@@ -6,6 +6,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type Query interface {
+	WithArgs(args ...*Argument) Query
+	WithArg(key string, value any) Query
+	Exec(ctx context.Context) error
+}
+
 type query struct {
 	pool  *pgxpool.Pool
 	sql   string

@@ -6,6 +6,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type Command interface {
+	WithArgs(args ...*Argument) Command
+	WithArg(key string, value any) Command
+	Returning(dest any) Command
+	Exec(ctx context.Context) error
+}
+
 type command struct {
 	pool  *pgxpool.Pool
 	sql   string
