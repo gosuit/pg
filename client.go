@@ -9,15 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-type Config struct {
-	Host     string `confy:"host"     yaml:"host"     json:"host"     toml:"host"     env:"PG_HOST"    default:"localhost"`
-	Port     int    `confy:"port"     yaml:"port"     json:"port"     toml:"port"     env:"PG_PORT"    default:"5432"`
-	DBName   string `confy:"dbname"   yaml:"dbname"   json:"dbname"   toml:"dbname"   env:"PG_NAME"    default:"postgres"`
-	Username string `confy:"username" yaml:"username" json:"username" toml:"username" env:"PG_USER"`
-	Password string `confy:"password" env:"POSTGRES_PASSWORD"`
-	SSLMode  string `confy:"sslmode"  yaml:"sslmode" json:"sslmode"  toml:"sslmode"   env:"PG_SSLMODE" default:"disable"`
-}
-
 type Client interface {
 	Query(sql string, model any) Query
 	Command(sql string, model any) Command
@@ -25,6 +16,15 @@ type Client interface {
 
 	ToPgx() *pgxpool.Pool
 	ToDB() *sql.DB
+}
+
+type Config struct {
+	Host     string `confy:"host"     yaml:"host"     json:"host"     toml:"host"     env:"PG_HOST"    default:"localhost"`
+	Port     int    `confy:"port"     yaml:"port"     json:"port"     toml:"port"     env:"PG_PORT"    default:"5432"`
+	DBName   string `confy:"dbname"   yaml:"dbname"   json:"dbname"   toml:"dbname"   env:"PG_NAME"    default:"postgres"`
+	Username string `confy:"username" yaml:"username" json:"username" toml:"username" env:"PG_USER"`
+	Password string `confy:"password" env:"POSTGRES_PASSWORD"`
+	SSLMode  string `confy:"sslmode"  yaml:"sslmode" json:"sslmode"  toml:"sslmode"   env:"PG_SSLMODE" default:"disable"`
 }
 
 func New(ctx context.Context, cfg *Config) (Client, error) {
