@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -13,6 +14,8 @@ type queryManager interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 }
+
+type fnBase func(args []reflect.Value) (results []reflect.Value)
 
 type Argument struct {
 	key   string
