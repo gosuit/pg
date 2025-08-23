@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// TODO: error handling
+
 type sqlFunc = func(model reflect.Value, args map[string]any) (sql string, sqlArgs []any)
 
 func getSqlFunc(sql string, keys []valueKey, modelMeta *modelFields) sqlFunc {
@@ -27,6 +29,10 @@ func getSqlFuncBase(sql string, keys []valueKey, modelMeta *modelFields) fnBase 
 
 		for _, k := range keys {
 			if k.isModel {
+				if model.Kind() != reflect.Struct {
+					panic("can`t use array as src for sql")
+				}
+				
 				sqlArgs = append(sqlArgs, modelMeta.getters[k.key](model).Interface())
 			} else {
 				sqlArgs = append(sqlArgs, valueArgs[k.key])

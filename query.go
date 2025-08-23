@@ -2,8 +2,9 @@ package pg
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgxpool"
+	"errors"
+	"reflect"
+	"slices"
 )
 
 type Query interface {
@@ -13,10 +14,10 @@ type Query interface {
 }
 
 type query struct {
-	pool  *pgxpool.Pool
-	sql   string
-	model any
-	args  map[string]any
+	client *client
+	sql    string
+	dest   reflect.Value
+	args   map[string]any
 }
 
 func (q *query) WithArgs(args ...*Argument) Query {
@@ -33,10 +34,44 @@ func (q *query) WithArg(key string, value any) Query {
 	return q
 }
 
-func (q *query) Exec(ctx context.Context) error {
-	q.getQueryManager(ctx)
+var validQueryDestKinds = []reflect.Kind{reflect.Struct, reflect.Array, reflect.Slice}
 
-	return nil
+func (q *query) Exec(ctx context.Context) error {
+	if q.dest.Kind() != reflect.Pointer {
+		return errors.New("dest must be pointer")
+	}
+
+	q.dest = q.dest.Elem()
+
+	if !slices.Contains(validQueryDestKinds, q.dest.Kind()) {
+		return errors.New("dest must be struct or array")
+	}
+
+	var destType reflect.Type
+
+	if q.dest.Kind() == reflect.Struct {
+		destType = q.dest.Type()
+	} else {
+		destType = q.dest.Type().Elem()
+	}
+
+	err := q.client.registerModel(destType)
+	if err != nil {
+		return err
+	}
+
+	sqlFunc := q.client.getSqlFunc(destType, q.sql)
+
+	sql, sqlArgs := sqlFunc(q.dest, q.args)
+
+	qm := q.getQueryManager(ctx)
+
+	rows, err := qm.Query(ctx, sql, sqlArgs...)
+	if err != nil {
+		return err
+	}
+
+	return q.client.mapRowsToDest(rows, q.dest)
 }
 
 func (q *query) getQueryManager(ctx context.Context) queryManager {
@@ -45,5 +80,5 @@ func (q *query) getQueryManager(ctx context.Context) queryManager {
 		return tx
 	}
 
-	return q.pool
+	return q.client.pool
 }

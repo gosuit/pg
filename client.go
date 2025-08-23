@@ -3,15 +3,21 @@ package pg
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"reflect"
+	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
+// TODO: error handling
+
 type Client interface {
-	Query(sql string, model any) Query
-	Command(sql string, model any) Command
+	Query(sql string, dest any) Query
+	Command(sql string, src any) Command
 	Transactional(ctx context.Context, fn TxFunc, opts ...TxOption) error
 
 	ToPgx() *pgxpool.Pool
@@ -45,26 +51,32 @@ func New(ctx context.Context, cfg *Config) (Client, error) {
 		return nil, err
 	}
 
-	return &client{pool}, nil
+	return &client{
+		pool:   pool,
+		models: make(map[reflect.Type]*parsedModel),
+	}, nil
 }
 
 type client struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	models  map[reflect.Type]*parsedModel
+	modelMu sync.Mutex
 }
 
-func (c *client) Query(sql string, model any) Query {
+func (c *client) Query(sql string, dest any) Query {
 	return &query{
-		pool:  c.pool,
-		sql:   sql,
-		model: model,
+		client: c,
+		sql:    sql,
+		dest:   reflect.ValueOf(dest),
 	}
 }
 
-func (c *client) Command(sql string, model any) Command {
+func (c *client) Command(sql string, src any) Command {
 	return &command{
-		pool:  c.pool,
-		sql:   sql,
-		model: model,
+		client:        c,
+		sql:           sql,
+		src:           reflect.ValueOf(src),
+		withReturning: false,
 	}
 }
 
@@ -100,4 +112,109 @@ func (c *client) ToPgx() *pgxpool.Pool {
 
 func (c *client) ToDB() *sql.DB {
 	return stdlib.OpenDBFromPool(c.pool)
+}
+
+func (c *client) registerModel(modelType reflect.Type) error {
+	_, ok := c.models[modelType]
+	if ok {
+		return nil
+	}
+
+	c.modelMu.Lock()
+	defer c.modelMu.Unlock()
+
+	_, ok = c.models[modelType]
+	if ok {
+		return nil
+	}
+
+	fields, err := parseModel(modelType)
+	if err != nil {
+		return err
+	}
+
+	model := &parsedModel{
+		fields:  fields,
+		queries: make(map[string]sqlFunc),
+	}
+
+	c.models[modelType] = model
+
+	return nil
+}
+
+func (c *client) getSqlFunc(modelType reflect.Type, sql string) sqlFunc {
+	fn, ok := c.models[modelType].queries[sql]
+	if ok {
+		return fn
+	}
+
+	c.modelMu.Lock()
+	defer c.modelMu.Unlock()
+
+	fn, ok = c.models[modelType].queries[sql]
+	if ok {
+		return fn
+	}
+
+	parsedSql, keys := extractKeys(sql)
+
+	fn = getSqlFunc(parsedSql, keys, c.models[modelType].fields)
+	c.models[modelType].queries[sql] = fn
+
+	return fn
+}
+
+func (c *client) mapRowsToDest(rows pgx.Rows, dest reflect.Value) error {
+	if dest.Kind() == reflect.Struct {
+		rowsCount := 0
+		setters := c.models[dest.Type()].fields.setters
+		for rows.Next() {
+			if rowsCount > 0 {
+				return errors.New("to many values")
+			}
+
+			values, err := rows.Values()
+			if err != nil {
+				return err
+			}
+
+			descriptions := rows.FieldDescriptions()
+
+			for i := range descriptions {
+				column := descriptions[i].Name
+
+				setters[column](dest, reflect.ValueOf(values[i]))
+			}
+
+			rowsCount++
+		}
+
+		if rowsCount == 0 {
+			return errors.New("not found value")
+		}
+	} else {
+		setters := c.models[dest.Type().Elem()].fields.setters
+		for rows.Next() {
+
+			values, err := rows.Values()
+			if err != nil {
+				return err
+			}
+
+			descriptions := rows.FieldDescriptions()
+
+			model := reflect.New(dest.Type().Elem()).Elem()
+
+			for i := range descriptions {
+				column := descriptions[i].Name
+
+				setters[column](model, reflect.ValueOf(values[i]))
+			}
+
+			dest.Set(reflect.Append(dest, model))
+		}
+	}
+
+	return nil
 }

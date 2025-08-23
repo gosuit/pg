@@ -6,13 +6,20 @@ import (
 	"strings"
 )
 
+// TODO: add support of specific types
+
+type parsedModel struct {
+	fields  *modelFields
+	queries map[string]sqlFunc
+}
+
 type modelFields struct {
 	getters map[string]getter
 	setters map[string]setter
 }
 
-func parseModel(model reflect.Value) (*modelFields, error) {
-	paths := getPaths(model, "", []int{})
+func parseModel(modelType reflect.Type) (*modelFields, error) {
+	paths := getPaths(modelType, "", []int{})
 
 	meta := &modelFields{
 		getters: make(map[string]getter),
@@ -29,14 +36,13 @@ func parseModel(model reflect.Value) (*modelFields, error) {
 
 type field struct {
 	indexPath []int
-	value     reflect.Type
 }
 
-func getPaths(model reflect.Value, baseKey string, basePath []int) map[string]field {
+func getPaths(modelType reflect.Type, baseKey string, basePath []int) map[string]field {
 	result := make(map[string]field)
 
-	for i := range model.NumField() {
-		fieldStructType := model.Type().Field(i)
+	for i := range modelType.NumField() {
+		fieldStructType := modelType.Field(i)
 
 		key, ok := fieldStructType.Tag.Lookup("pg")
 		if ok && key == "-" {
@@ -60,12 +66,11 @@ func getPaths(model reflect.Value, baseKey string, basePath []int) map[string]fi
 		if fieldStructType.Type.Kind() != reflect.Struct {
 			f := field{
 				indexPath: path,
-				value:     model.Field(i).Type(),
 			}
 
 			result[key] = f
 		} else {
-			toAdd := getPaths(model.Field(i), key, path)
+			toAdd := getPaths(modelType.Field(i).Type, key, path)
 
 			maps.Copy(result, toAdd)
 		}

@@ -2,8 +2,8 @@ package pg
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgxpool"
+	"errors"
+	"reflect"
 )
 
 type Command interface {
@@ -14,11 +14,12 @@ type Command interface {
 }
 
 type command struct {
-	pool  *pgxpool.Pool
-	sql   string
-	model any
-	dest  any
-	args  map[string]any
+	client        *client
+	sql           string
+	src           reflect.Value
+	dest          reflect.Value
+	withReturning bool
+	args          map[string]any
 }
 
 func (c *command) WithArgs(args ...*Argument) Command {
@@ -36,13 +37,47 @@ func (c *command) WithArg(key string, value any) Command {
 }
 
 func (c *command) Returning(dest any) Command {
-	c.dest = dest
+	c.dest = reflect.ValueOf(dest)
+	c.withReturning = true
 
 	return c
 }
 
 func (c *command) Exec(ctx context.Context) error {
-	c.getQueryManager(ctx)
+	if c.src.Kind() != reflect.Pointer {
+		return errors.New("model must be pointer")
+	}
+
+	c.src = c.src.Elem()
+
+	if c.src.Kind() != reflect.Struct {
+		return errors.New("model must be struct")
+	}
+
+	err := c.client.registerModel(c.src.Type())
+	if err != nil {
+		return err
+	}
+
+	sqlFunc := c.client.getSqlFunc(c.src.Type(), c.sql)
+
+	sql, sqlArgs := sqlFunc(c.src, c.args)
+
+	qm := c.getQueryManager(ctx)
+
+	if !c.withReturning {
+		_, err := qm.Exec(ctx, sql, sqlArgs...)
+		if err != nil {
+			return err
+		}
+	} else {
+		rows, err := qm.Query(ctx, sql, sqlArgs...)
+		if err != nil {
+			return err
+		}
+
+		return c.client.mapRowsToDest(rows, c.dest.Elem()) // !!! change this shit
+	}
 
 	return nil
 }
@@ -53,5 +88,5 @@ func (c *command) getQueryManager(ctx context.Context) queryManager {
 		return tx
 	}
 
-	return c.pool
+	return c.client.pool
 }
