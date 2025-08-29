@@ -10,6 +10,7 @@ import (
 func main() {
 	ctx := context.Background()
 
+	// pg.Config support "confy" and other configuration tags.
 	cfg := &pg.Config{
 		Host:     "localhost",
 		Port:     5432,
@@ -19,11 +20,13 @@ func main() {
 		SSLMode:  "disable",
 	}
 
+	// Create client.
 	client, err := pg.New(ctx, cfg)
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}
-
-	client.ToPgx()
-	client.ToDB()
+ 
+	// Use or convert client.
+	client.ToPgx() // *pgxpool.Pool will be returned.
+	client.ToDB()  // *sql.DB will be returned.
 }
