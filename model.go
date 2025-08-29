@@ -3,10 +3,14 @@ package pg
 import (
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
+	"time"
 )
 
 // TODO: add support of specific types
+
+var specificTypes = []reflect.Type{reflect.TypeOf(time.Time{})}
 
 type parsedModel struct {
 	fields  *modelFields
@@ -63,7 +67,7 @@ func getPaths(modelType reflect.Type, baseKey string, basePath []int) map[string
 			path = append(path, i)
 		}
 
-		if fieldStructType.Type.Kind() != reflect.Struct {
+		if fieldStructType.Type.Kind() != reflect.Struct || slices.Contains(specificTypes, fieldStructType.Type) {
 			f := field{
 				indexPath: path,
 			}
@@ -116,7 +120,11 @@ func getSetterBase(indexPath []int) fnBase {
 			}
 		}
 
-		field.Set(value.Convert(field.Type()))
+		if !value.IsValid() {
+			field.SetZero()
+		} else {
+			field.Set(value.Convert(field.Type()))
+		}
 
 		return results
 	}

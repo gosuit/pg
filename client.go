@@ -13,8 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// TODO: error handling
-
 type Client interface {
 	Query(sql string, dest any) Query
 	Command(sql string, src any) Command
@@ -194,7 +192,12 @@ func (c *client) mapRowsToDest(rows pgx.Rows, dest reflect.Value) error {
 			return errors.New("not found value")
 		}
 	} else {
-		setters := c.models[dest.Type().Elem()].fields.setters
+		modelType := dest.Type().Elem()
+		if dest.Type().Elem().Kind() == reflect.Pointer {
+			modelType = modelType.Elem()
+		}
+
+		setters := c.models[modelType].fields.setters
 		for rows.Next() {
 
 			values, err := rows.Values()
@@ -204,12 +207,16 @@ func (c *client) mapRowsToDest(rows pgx.Rows, dest reflect.Value) error {
 
 			descriptions := rows.FieldDescriptions()
 
-			model := reflect.New(dest.Type().Elem()).Elem()
+			model := reflect.New(modelType).Elem()
 
 			for i := range descriptions {
 				column := descriptions[i].Name
 
 				setters[column](model, reflect.ValueOf(values[i]))
+			}
+
+			if dest.Type().Elem().Kind() == reflect.Pointer {
+				model = model.Addr()
 			}
 
 			dest.Set(reflect.Append(dest, model))

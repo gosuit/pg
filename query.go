@@ -43,8 +43,20 @@ func (q *query) Exec(ctx context.Context) error {
 
 	q.dest = q.dest.Elem()
 
-	if !slices.Contains(validQueryDestKinds, q.dest.Kind()) {
+	if !slices.Contains(validQueryDestKinds, q.dest.Kind()) || slices.Contains(specificTypes, q.dest.Type()) {
 		return errors.New("dest must be struct or array")
+	}
+
+	if q.dest.Kind() != reflect.Struct {
+		elemType := q.dest.Type().Elem()
+
+		if elemType.Kind() == reflect.Pointer {
+			elemType = elemType.Elem()
+		}
+
+		if elemType.Kind() != reflect.Struct {
+			return errors.New("dest must be struct or array")
+		}
 	}
 
 	var destType reflect.Type
@@ -52,7 +64,11 @@ func (q *query) Exec(ctx context.Context) error {
 	if q.dest.Kind() == reflect.Struct {
 		destType = q.dest.Type()
 	} else {
-		destType = q.dest.Type().Elem()
+		if q.dest.Type().Elem().Kind() == reflect.Pointer {
+			destType = q.dest.Type().Elem().Elem()
+		} else {
+			destType = q.dest.Type().Elem()
+		}
 	}
 
 	err := q.client.registerModel(destType)
