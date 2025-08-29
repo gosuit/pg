@@ -1,8 +1,8 @@
 # Pg
 
-Pg is a PostgreSQL client. It is designed to simplify thigs like client configuration, model's fields mapping, etc.
+Pg is a PostgreSQL client designed to simplify things like configuration, mapping of model fields, etc.
 
-It use [pgx](https://github.com/jackc/pgx) for database connection.
+It uses [pgx](https://github.com/jackc/pgx) to connect to PostgreSQL.
 
 ## Installation
 
@@ -14,7 +14,7 @@ go get github.com/gosuit/pg
 
 - **Easy client configuration**
 - **Model's fields mapping**
-- **Concise transaction support**
+- **Concise transaction management**
 
 ## Documentation 
 - [**Client initialization**](docs/init)
