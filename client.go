@@ -66,6 +66,7 @@ func (c *client) Query(sql string, dest any) Query {
 		client: c,
 		sql:    sql,
 		dest:   reflect.ValueOf(dest),
+		args:   make(map[string]any),
 	}
 }
 
@@ -75,6 +76,7 @@ func (c *client) Command(sql string, src any) Command {
 		sql:           sql,
 		src:           reflect.ValueOf(src),
 		withReturning: false,
+		args:          make(map[string]any),
 	}
 }
 

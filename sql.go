@@ -32,7 +32,7 @@ func getSqlFuncBase(sql string, keys []valueKey, modelMeta *modelFields) fnBase 
 				if model.Kind() != reflect.Struct {
 					panic("can`t use array as src for sql")
 				}
-				
+
 				sqlArgs = append(sqlArgs, modelMeta.getters[k.key](model).Interface())
 			} else {
 				sqlArgs = append(sqlArgs, valueArgs[k.key])
@@ -59,7 +59,7 @@ func extractKeys(sql string) (string, []valueKey) {
 	keys := []valueKey{}
 	toReplace := []string{}
 
-	for _, s := range sql {
+	for i, s := range sql {
 		symb := string(s)
 
 		if symb == "@" || symb == "#" {
@@ -73,7 +73,9 @@ func extractKeys(sql string) (string, []valueKey) {
 			if collectKey {
 				if strings.Contains(ch, symb) {
 					collectedKey += symb
-				} else {
+				}
+
+				if !strings.Contains(ch, symb) || i == len(sql)-1 {
 					if len(collectedKey) == 1 {
 						panic("empty key")
 					}
