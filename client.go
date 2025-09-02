@@ -143,10 +143,10 @@ func (c *client) registerModel(modelType reflect.Type) error {
 	return nil
 }
 
-func (c *client) getSqlFunc(modelType reflect.Type, sql string) sqlFunc {
+func (c *client) getSqlFunc(modelType reflect.Type, sql string) (sqlFunc, error) {
 	fn, ok := c.models[modelType].queries[sql]
 	if ok {
-		return fn
+		return fn, nil
 	}
 
 	c.modelMu.Lock()
@@ -154,15 +154,18 @@ func (c *client) getSqlFunc(modelType reflect.Type, sql string) sqlFunc {
 
 	fn, ok = c.models[modelType].queries[sql]
 	if ok {
-		return fn
+		return fn, nil
 	}
 
-	parsedSql, keys := extractKeys(sql)
+	parsedSql, keys, err := extractKeys(sql)
+	if err != nil {
+		return nil, err
+	}
 
 	fn = getSqlFunc(parsedSql, keys, c.models[modelType].fields)
 	c.models[modelType].queries[sql] = fn
 
-	return fn
+	return fn, nil
 }
 
 func (c *client) mapRowsToDest(rows pgx.Rows, dest reflect.Value) error {
@@ -184,7 +187,15 @@ func (c *client) mapRowsToDest(rows pgx.Rows, dest reflect.Value) error {
 			for i := range descriptions {
 				column := descriptions[i].Name
 
-				setters[column](dest, reflect.ValueOf(values[i]))
+				setter, ok := setters[column]
+				if !ok {
+					continue
+				}
+
+				err = setter(dest, reflect.ValueOf(values[i]))
+				if err != nil {
+					return err
+				}
 			}
 
 			rowsCount++
@@ -214,7 +225,15 @@ func (c *client) mapRowsToDest(rows pgx.Rows, dest reflect.Value) error {
 			for i := range descriptions {
 				column := descriptions[i].Name
 
-				setters[column](model, reflect.ValueOf(values[i]))
+				setter, ok := setters[column]
+				if !ok {
+					continue
+				}
+
+				err = setter(model, reflect.ValueOf(values[i]))
+				if err != nil {
+					return err
+				}
 			}
 
 			if dest.Type().Elem().Kind() == reflect.Pointer {

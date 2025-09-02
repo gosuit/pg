@@ -59,9 +59,15 @@ func (c *command) Exec(ctx context.Context) error {
 		return err
 	}
 
-	sqlFunc := c.client.getSqlFunc(c.src.Type(), c.sql)
+	sqlFunc, err := c.client.getSqlFunc(c.src.Type(), c.sql)
+	if err != nil {
+		return err
+	}
 
-	sql, sqlArgs := sqlFunc(c.src, c.args)
+	sql, sqlArgs, err := sqlFunc(c.src, c.args)
+	if err != nil {
+		return err
+	}
 
 	qm := c.getQueryManager(ctx)
 
@@ -76,7 +82,7 @@ func (c *command) Exec(ctx context.Context) error {
 			return err
 		}
 
-		return c.client.mapRowsToDest(rows, c.dest.Elem()) // !!! change this shit
+		return c.client.mapRowsToDest(rows, c.dest.Elem())
 	}
 
 	return nil

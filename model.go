@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"errors"
 	"maps"
 	"reflect"
 	"slices"
@@ -8,9 +9,11 @@ import (
 	"time"
 )
 
-// TODO: add support of specific types
+const (
+	pgTag = "pg"
+)
 
-var specificTypes = []reflect.Type{reflect.TypeOf(time.Time{})}
+var specificTypes = []reflect.Type{reflect.TypeFor[time.Time]()}
 
 type parsedModel struct {
 	fields  *modelFields
@@ -31,24 +34,20 @@ func parseModel(modelType reflect.Type) (*modelFields, error) {
 	}
 
 	for k, v := range paths {
-		meta.getters[k] = getGetter(v.indexPath)
-		meta.setters[k] = getSetter(v.indexPath)
+		meta.getters[k] = getGetter(v)
+		meta.setters[k] = getSetter(v)
 	}
 
 	return meta, nil
 }
 
-type field struct {
-	indexPath []int
-}
-
-func getPaths(modelType reflect.Type, baseKey string, basePath []int) map[string]field {
-	result := make(map[string]field)
+func getPaths(modelType reflect.Type, baseKey string, basePath []int) map[string][]int {
+	result := make(map[string][]int)
 
 	for i := range modelType.NumField() {
 		fieldStructType := modelType.Field(i)
 
-		key, ok := fieldStructType.Tag.Lookup("pg")
+		key, ok := fieldStructType.Tag.Lookup(pgTag)
 		if ok && key == "-" {
 			continue
 		} else if !ok {
@@ -68,11 +67,7 @@ func getPaths(modelType reflect.Type, baseKey string, basePath []int) map[string
 		}
 
 		if fieldStructType.Type.Kind() != reflect.Struct || slices.Contains(specificTypes, fieldStructType.Type) {
-			f := field{
-				indexPath: path,
-			}
-
-			result[key] = f
+			result[key] = path
 		} else {
 			toAdd := getPaths(modelType.Field(i).Type, key, path)
 
@@ -83,14 +78,15 @@ func getPaths(modelType reflect.Type, baseKey string, basePath []int) map[string
 	return result
 }
 
-type setter = func(model reflect.Value, value reflect.Value)
+type setter = func(model reflect.Value, value reflect.Value) error
 type getter = func(reflect.Value) reflect.Value
 
 func getSetter(indexPath []int) setter {
 	base := getSetterBase(indexPath)
 
-	setterIn := []reflect.Type{reflect.TypeOf(reflect.Value{}), reflect.TypeOf(reflect.Value{})}
-	setterType := reflect.FuncOf(setterIn, []reflect.Type{}, false)
+	setterIn := []reflect.Type{reflect.TypeFor[reflect.Value](), reflect.TypeFor[reflect.Value]()}
+	setterOut := []reflect.Type{reflect.TypeFor[error]()}
+	setterType := reflect.FuncOf(setterIn, setterOut, false)
 
 	return reflect.MakeFunc(setterType, base).Interface().(setter)
 }
@@ -98,8 +94,8 @@ func getSetter(indexPath []int) setter {
 func getGetter(indexPath []int) getter {
 	base := getGetterBase(indexPath)
 
-	getterIn := []reflect.Type{reflect.TypeOf(reflect.Value{})}
-	getterOut := []reflect.Type{reflect.TypeOf(reflect.Value{})}
+	getterIn := []reflect.Type{reflect.TypeFor[reflect.Value]()}
+	getterOut := []reflect.Type{reflect.TypeFor[reflect.Value]()}
 	getterType := reflect.FuncOf(getterIn, getterOut, false)
 
 	return reflect.MakeFunc(getterType, base).Interface().(getter)
@@ -111,6 +107,7 @@ func getSetterBase(indexPath []int) fnBase {
 		value := args[1].Interface().(reflect.Value)
 
 		var field reflect.Value
+		var err error
 
 		for i := range indexPath {
 			if i == 0 {
@@ -122,8 +119,16 @@ func getSetterBase(indexPath []int) fnBase {
 
 		if !value.IsValid() {
 			field.SetZero()
-		} else {
+		} else if value.CanConvert(field.Type()) {
 			field.Set(value.Convert(field.Type()))
+		} else {
+			err = errors.New("invalid value")
+		}
+
+		if err != nil {
+			results = append(results, reflect.ValueOf(err))
+		} else {
+			results = append(results, reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()))
 		}
 
 		return results

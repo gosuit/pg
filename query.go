@@ -76,9 +76,15 @@ func (q *query) Exec(ctx context.Context) error {
 		return err
 	}
 
-	sqlFunc := q.client.getSqlFunc(destType, q.sql)
+	sqlFunc, err := q.client.getSqlFunc(destType, q.sql)
+	if err != nil {
+		return err
+	}
 
-	sql, sqlArgs := sqlFunc(q.dest, q.args)
+	sql, sqlArgs, err := sqlFunc(q.dest, q.args)
+	if err != nil {
+		return err
+	}
 
 	qm := q.getQueryManager(ctx)
 

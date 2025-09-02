@@ -1,20 +1,19 @@
 package pg
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 )
 
-// TODO: error handling
-
-type sqlFunc = func(model reflect.Value, args map[string]any) (sql string, sqlArgs []any)
+type sqlFunc = func(model reflect.Value, args map[string]any) (sql string, sqlArgs []any, err error)
 
 func getSqlFunc(sql string, keys []valueKey, modelMeta *modelFields) sqlFunc {
 	base := getSqlFuncBase(sql, keys, modelMeta)
 
-	sqlFuncIn := []reflect.Type{reflect.TypeOf(reflect.Value{}), reflect.TypeOf(make(map[string]any))}
-	sqlFuncOut := []reflect.Type{reflect.TypeOf(""), reflect.TypeOf([]any{})}
+	sqlFuncIn := []reflect.Type{reflect.TypeFor[reflect.Value](), reflect.TypeFor[map[string]any]()}
+	sqlFuncOut := []reflect.Type{reflect.TypeFor[string](), reflect.TypeFor[[]any](), reflect.TypeFor[error]()}
 	sqlFuncType := reflect.FuncOf(sqlFuncIn, sqlFuncOut, false)
 
 	return reflect.MakeFunc(sqlFuncType, base).Interface().(sqlFunc)
@@ -26,21 +25,40 @@ func getSqlFuncBase(sql string, keys []valueKey, modelMeta *modelFields) fnBase 
 		valueArgs := args[1].Interface().(map[string]any)
 
 		sqlArgs := []any{}
+		var err error = nil
 
 		for _, k := range keys {
 			if k.isModel {
 				if model.Kind() != reflect.Struct {
-					panic("can`t use array as src for sql")
+					err = errors.New("can`t use array as src for sql")
 				}
 
-				sqlArgs = append(sqlArgs, modelMeta.getters[k.key](model).Interface())
+				getter, ok := modelMeta.getters[k.key]
+				if ok {
+					sqlArgs = append(sqlArgs, getter(model).Interface())
+				} else {
+					err = errors.New("model field not found")
+					break
+				}
 			} else {
-				sqlArgs = append(sqlArgs, valueArgs[k.key])
+				value, ok := valueArgs[k.key]
+				if ok {
+					sqlArgs = append(sqlArgs, value)
+				} else {
+					err = errors.New("arg not found")
+					break
+				}
 			}
 		}
 
 		results = append(results, reflect.ValueOf(sql))
 		results = append(results, reflect.ValueOf(sqlArgs))
+
+		if err != nil {
+			results = append(results, reflect.ValueOf(err))
+		} else {
+			results = append(results, reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()))
+		}
 
 		return results
 	}
@@ -53,7 +71,7 @@ type valueKey struct {
 
 const ch = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-func extractKeys(sql string) (string, []valueKey) {
+func extractKeys(sql string) (string, []valueKey, error) {
 	collectKey := false
 	collectedKey := ""
 	keys := []valueKey{}
@@ -64,7 +82,7 @@ func extractKeys(sql string) (string, []valueKey) {
 
 		if symb == "@" || symb == "#" {
 			if collectKey {
-				panic("invalid key")
+				return "", nil, errors.New("invalid key")
 			} else {
 				collectKey = true
 				collectedKey = symb
@@ -77,7 +95,7 @@ func extractKeys(sql string) (string, []valueKey) {
 
 				if !strings.Contains(ch, symb) || i == len(sql)-1 {
 					if len(collectedKey) == 1 {
-						panic("empty key")
+						return "", nil, errors.New("empty key")
 					}
 
 					toReplace = append(toReplace, collectedKey)
@@ -103,5 +121,5 @@ func extractKeys(sql string) (string, []valueKey) {
 		sql = strings.ReplaceAll(sql, k, fmt.Sprintf("$%d", i+1))
 	}
 
-	return sql, keys
+	return sql, keys, nil
 }
