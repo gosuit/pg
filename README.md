@@ -7,7 +7,7 @@ It uses [pgx](https://github.com/jackc/pgx) to connect to PostgreSQL.
 ## Installation
 
 ```zsh
-go get github.com/gosuit/pg
+go get github.com/gosuit/pg/v2
 ``` 
 
 ## Features 
