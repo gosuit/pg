@@ -20,6 +20,7 @@ type Client interface {
 
 	ToPgx() *pgxpool.Pool
 	ToDB() *sql.DB
+	Close()
 }
 
 type Config struct {
@@ -112,6 +113,10 @@ func (c *client) ToPgx() *pgxpool.Pool {
 
 func (c *client) ToDB() *sql.DB {
 	return stdlib.OpenDBFromPool(c.pool)
+}
+
+func (c *client) Close() {
+	c.pool.Close()
 }
 
 func (c *client) registerModel(modelType reflect.Type) error {
