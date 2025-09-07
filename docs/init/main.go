@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/gosuit/pg"
+	"github.com/gosuit/pg/v2"
 )
 
 func main() {
