@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/gosuit/pg"
+	"github.com/gosuit/pg/v2"
 )
 
 type User struct {
